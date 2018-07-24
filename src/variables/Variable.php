@@ -11,9 +11,11 @@
  * @since     0.0.1
  */
 
-namespace Craft;
+namespace bossanova808\commerceregisteroncheckout\variables;
 
-class CommerceRegisterOnCheckoutVariable
+use Craft;
+
+class Variable
 {
     /**
      * Returns the session data lodged during registration at checkout time
@@ -21,8 +23,8 @@ class CommerceRegisterOnCheckoutVariable
     public function checkoutRegistered(){
 
         $return = null;
-        
-        $registered = craft()->httpSession->get("registered");
+
+        $registered = Craft::$app->getSession()->get("registered");
         if(is_bool($registered)){
             $return = $registered;
         }
@@ -33,17 +35,16 @@ class CommerceRegisterOnCheckoutVariable
     public function checkoutAccount(){
 
         $return = "";
-        
-        $account = craft()->httpSession->get("account");
+
+        $account = Craft::$app->getSession()->get("account");
         if($account) $return = $account;
 
         return $return;
     }
-    
+
     public function clearRegisterSession(){
-        craft()->httpSession->remove("registered");
-        craft()->httpSession->remove("account");
+        $session = Craft::$app->getSession();
+        $session->remove("registered");
+        $session->remove("account");
     }
-
-
 }
