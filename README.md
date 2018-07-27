@@ -4,18 +4,30 @@ Register customers on checkout with Craft Commerce
 
 ## Installation
 
-To install Commerce Register on Checkout (CROC), follow these steps:
+To install from git, add a new repository to the `repositories` section in your composer.json:
 
-1. Downloaded the latest release
-2. Unzip and copy the plugin folder `commerceregisteroncheckout` to your `craft/plugins` folder
-3. Install plugin in the Craft Control Panel under Settings > Plugins
-4. N.B. The plugin folder should be named `commerceregisteroncheckout` for Craft to see it.  
+```json
+"repositories": [
+  {
+    "type": "git",
+    "url": "https://github.com/bossanova808/CommerceRegisterOnCheckout"
+  }
+]
+```
 
-Commerce Register on Checkout has been tested with Craft 2.6+ and Commerce 1.1+, and is in daily use on working, live stores.
+And add the relevant `require`:
+
+```json
+"require": {
+  "bossanova808/commerceregisteroncheckout": "dev-craft3",
+}
+```
+
+`composer install` to download the plugin. In Craft Control Panel -> Settings -> Plugins, install Commerce Register On Checkout.
 
 ## Commerce Register on Checkout Overview
 
-This plugin allows you to more easily add user registration as part of your Commerce checkout process.  
+This plugin allows you to more easily add user registration as part of your Commerce checkout process.
 
 Currently only allows for registering users with their username set to their email - however given commerce keys everything by the email, this is the most natural set up anyway.
 
@@ -31,70 +43,79 @@ In short, this plugin  allows for a more integrated approach - registering the u
 
 In addition, if you use a standard registration form, your customers will need to re-enter their address details when they do their second order as these are not automatically transferred with the registration (order records are, but not addresses). This is less than ideal from a UX perspective.
 
-## Configuring Commerce Register on Checkout
-
-You can turn on some extra logging in the plugin settings - it's probably fine to leave this on even on your live server - it just logs all successful user registrations in addition to any errors/warnings.
-
 ## Using Commerce Register on Checkout
 
-At any point in your checkout flow before the final payment/order completion, you need to make one additional POST request.  I do this by ajax just before the payment form is submitted.
+At any point during the checkout flow, before the final payment/order completion, POST request can be made to `/commerceregisteroncheckout/checkout/save-registration-details`.
 
-This request must post the users desired password to the `saveRegistrationDetails` controller.  This password is then encrypted using Craft's built in encryption mechanisms, and saved along with the order number to a temporary database record.
+Example form:
 
-It's very simple, here's some sample code:
+```html
+ <form method="POST">
+    {{ csrfInput() }}
 
-HTML Form:
+    <input type="hidden" name="action" value="/commerceregisteroncheckout/checkout/save-registration-details">
+    {{ redirectInput('/commerce/cart/update-cart') }}
 
-    <input type="checkbox" value="true" id="registerUser" name="registerUser" checked>
-    <input type="password" value="" placeholder="New Password (min. 6 characters)" name="password">
+    <input type="password" value="" name="password">
 
-JS:
+    <label for="">Email</label>
+    <input type="text" name="email"/>
+    <input type="submit" value="Continue"/>
+</form>
+```
+
+Alternatively, an AJAX request can be used:
+
+```html
+<input type="checkbox" value="true" id="registerUser" name="registerUser" checked>
+<input type="password" value="" placeholder="New Password (min. 6 characters)" name="password">
+```
 
 Somehere in e.g. your master layout set a variable to the CSRF token value (if you're using CSRF verification):
 
-        window.csrfTokenValue = "{{ craft.request.csrfToken|e('js') }}"
+```javascript
+window.csrfTokenValue = "{{ craft.request.csrfToken|e('js') }}"
+```
 
 Then the JS you need is just something like this:
 
-        // Has the customer chosen to register an account?
-        if ($('#registerUser').prop('checked')) {
-            var pw_value = $('input[type="password"]').val();
-            var pw_error = '';
-            // Validate the passwrod meets Craft's rules
-            if (pw_value.length < 6) {
-                pw_error = "Password length must be 6 or more characters";
+```javascript
+// Has the customer chosen to register an account?
+if ($('#registerUser').prop('checked')) {
+    var pw_value = $('input[type="password"]').val();
+    var pw_error = '';
+    // Validate the passwrod meets Craft's rules
+    if (pw_value.length < 6) {
+        pw_error = "Password length must be 6 or more characters";
+    }
+    if (pw_error) {
+        alert(pw_error);
+    }
+    // Lodge the registration details for later retrieval
+    else {
+        $.ajax({
+            type: 'POST',
+            url: '/commerceregisteroncheckout/checkout/save-registration-details',
+            data: {
+                CRAFT_CSRF_TOKEN: window.csrfTokenValue,
+                password: pw_value,
             }
-            if (pw_error) {
-                alert(pw_error);
+            complete: {
+                // NB! Your call to your payment function must
+                // run only AFTER the registration details have been lodged
+                // So pop it here...
+                doPayment();
             }
-            // Lodge the registration details for later retrieval
-            else {
-                $.ajax({
-                    type: 'POST',
-                    url: '/actions/commerceRegisterOnCheckout/saveRegistrationDetails',
-                    data: {
-                        CRAFT_CSRF_TOKEN: window.csrfTokenValue,
-                        password: pw_value,
-                    }
-                    complete: {
-                        // NB! Your call to your payment function must 
-                        // run only AFTER the registration details have been lodged
-                        // So pop it here...
-                        doPayment();
-                    }
-                });
-            }
-        }
-        // Register account not chosen, just do the actual payment...
-        else {
-            doPayment();
-        }
+        });
+    }
+}
+// Register account not chosen, just do the actual payment...
+else {
+    doPayment();
+}
+```
 
-(NB - as above you should also validate the password on the front end to make sure it meets Craft's minimum 6 character requirement, or the user registration later may fail).
-
-`doPayment` is of course your own function that will actually submit your payment form.
-
-The plugin then listens to the `commerce_orders.onOrderComplete` event.  For each completed order it looks for a saved record, and if it finds one then registers the user.  It will also immediately log them in, and assign them to the default user group, just like a normal user registration.
+The password is encrypted using Craft's encryption API. Once the order is completed, the user is registered and immediately logged in.
 
 ## Handling Success & Errors
 
@@ -118,14 +139,14 @@ Here's some sketch code to get you started:
         {# Success, if true #}
         {% if registered %}
             <do some stuff>
-        
+
         {# Failure, otherwise #}
         {% else %}
             {% if account|length %}
                 {% if "has already been taken" in account.getError('email') %}
 
                 ... Point out they are already registered...
-                
+
             {% else %}
                 ...etc, e.g. present a user registration form with as much filled in as possible>
             }
@@ -140,29 +161,27 @@ The event parameters for both events are the Order and User models.
 
 You can listen and act on these events if needed, e.g.:
 
-```
+```php
+use bossanova808\commerceregisteroncheckout\services\Events as EventsService;
 
-        craft()->on('commerceregisteroncheckout.onBeforeRegister', function($event){
+...
 
-            $order = $event->params['order'];
-            $user = $event->params['user'];
-
-            ...etc
-
-        }
-
-```
+Event::on(EventsService::class, EventsService::EVENT_ON_BEFORE_REGISTER, function(Event $event) {
+    $order = $event->order;
+    $user = $event->user;
+});
 
 ```
 
-        craft()->on('commerceregisteroncheckout.onRegisterComplete', function($event){
+```php
+use bossanova808\commerceregisteroncheckout\services\Events as EventsService;
 
-            $order = $event->params['order'];
-            $user = $event->params['user'];
+...
 
-            ...etc
-
-        }
+Event::on(EventsService::class, EventsService::EVENT_ON_REGISTER_COMPLETE, function(Event $event) {
+    $order = $event->order;
+    $user = $event->user;
+});
 
 ```
 
