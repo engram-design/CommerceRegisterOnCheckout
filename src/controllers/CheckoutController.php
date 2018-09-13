@@ -5,6 +5,7 @@ use Craft;
 use craft\commerce\Plugin as Commerce;
 use bossanova808\commerceregisteroncheckout\Plugin;
 use craft\web\Controller;
+use yii\web\HttpException;
 
 class CheckoutController extends Controller
 {
@@ -30,7 +31,7 @@ class CheckoutController extends Controller
             if($ajax){
                 $this->asErrorJson("Password cannot be empty");
             } else {
-                throw new HttpException(400, Craft::t("Password cannot be empty"));
+                throw new HttpException(400, Craft::t('site', 'Password cannot be empty'));
             }
         }
 
