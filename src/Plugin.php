@@ -44,7 +44,7 @@ class Plugin extends \craft\base\Plugin
         }
         else
         {
-            $msg = "\n\n" . print_r($msg, true) . "\n";
+            $msg = "\n\n" . json_encode($msg) . "\n";
         }
 
         Craft::getLogger()->log($msg, $level);
